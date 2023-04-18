@@ -21,7 +21,7 @@ s4s <- read_csv("../../data/S4S_rawExport_withCohort5&Upperclassman2018&Soph2019
 ## FAM & EVEC files by ancestry ------------------------------------------------
 # AMR = Admixed American ancestry
 # AFR = African Ancestry
-# EAS = Easy Asian ancestry
+# EAS = East Asian ancestry
 # EUR = European ancestry
 # SAS = South Asian ancestry
 
@@ -121,11 +121,13 @@ dep_s4s <- dep_s4s %>%
   mutate(depScore = if_else(dep_filter != 4, (depScore / dep_filter) * 4, depScore))
 
 # Check scores
-dep_s4s %>%
-  summarize(min_score = min(dep_s4s$depScore), 
-          mean_score = mean(dep_s4s$depScore), 
-          med_score = median(dep_s4s$depScore), 
-          max_score = max(dep_s4s$depScore))
+summary(dep_s4s$depScore)
+# min = 4
+# 1st Q = 6
+# median = 8
+# mean = 9.059
+# 3rd Q = 11
+# max = 20
 
 
 # CLEAN IPV VARIABLES ##########################################################
@@ -156,30 +158,28 @@ ipv_s4s <- dep_s4s %>%
 # Sum each category (physical assault, sexual assault, & other uncomfortable sexual events), ignoring missing data.
 ipv_calc_s4s <- ipv_s4s %>%
   rowwise() %>%
-  mutate(sumscore_PA = sum(y1f_str_1b_before12, y1f_str_1b_past12),
-         sumscore_SA = sum(y1f_str_1c_before12, y1f_str_1c_past12),
-         sumscore_other = sum(y1f_str_1d_before12, y1f_str_1d_past12)) %>%
-  mutate(sumscore_PA = if_else(is.na(sumscore_PA), Y1F_str_1b_beforeVCU, sumscore_PA),
-         sumscore_SA = if_else(is.na(sumscore_SA), Y1F_str_1c_beforeVCU, sumscore_SA),
-         sumscore_other = if_else(is.na(sumscore_other), Y1F_str_1d_beforeVCU, sumscore_other))
+  mutate(PAscore = sum(y1f_str_1b_before12, y1f_str_1b_past12),
+         SAscore = sum(y1f_str_1c_before12, y1f_str_1c_past12),
+         USEscore = sum(y1f_str_1d_before12, y1f_str_1d_past12)) %>%
+  mutate(PAscore = if_else(is.na(PAscore), Y1F_str_1b_beforeVCU, PAscore),
+         SAscore = if_else(is.na(SAscore), Y1F_str_1c_beforeVCU, SAscore),
+         USEscore = if_else(is.na(USEscore), Y1F_str_1d_beforeVCU, USEscore))
 
 # Looking at any occurrence of assault, replace any score above one with one
 # 0 = No  
 # 1 = Yes  
 # NA = Missing data  
 ipv_calc <- ipv_calc_s4s %>%
-  mutate(sumscore_PA = if_else(sumscore_PA > 1, 1, sumscore_PA),
-         sumscore_SA = if_else(sumscore_SA > 1, 1, sumscore_SA),
-         sumscore_other = if_else(sumscore_other > 1, 1, sumscore_other))
+  mutate(PAscore = if_else(PAscore > 1, 1, PAscore),
+         SAscore = if_else(SAscore > 1, 1, SAscore),
+         USEscore = if_else(USEscore > 1, 1, USEscore))
 
 # Do a rowwise summation of all sumscores to get the total score of at least one 
 # occurrence of assault in any category.
-ipv_calc$sumscore_total <- apply(ipv_calc[,c("sumscore_PA", "sumscore_SA", "sumscore_other")], 1, sumNA, na.rm=T)
+ipv_calc$IPVscore <- apply(ipv_calc[,c("PAscore", "SAscore", "USEscore")], 1, sumNA, na.rm=T)
 
-# 1 = Never happened  
-# 0 = Yes, it happened
 ipv_calc %>%
-  count(sumscore_total)
+  count(IPVscore)
 
 
 ## calculate negating scores ---------------------------------------------------
@@ -204,43 +204,50 @@ never_dat <- ipv_calc %>%
 # If `align` variable == 0, then `sumscore` and `never` variable are equal (are incongruent -- bad!). 
 align_dat <- never_dat %>%
   rowwise() %>%
-  mutate(align_PA = if_else(sumscore_PA != y1f_str_1b_never, 1, 0),
-         align_SA = if_else(sumscore_SA != y1f_str_1c_never, 1, 0),
-         align_other = if_else(sumscore_other != y1f_str_1d_never, 1, 0))
+  mutate(align_PA = if_else(PAscore == 1 & y1f_str_1b_never == 1, 1, 0),
+         align_SA = if_else(SAscore == 1 & y1f_str_1c_never == 1, 1, 0),
+         align_other = if_else(USEscore == 1 & y1f_str_1d_never == 1, 1, 0))
 
 align_dat$align_total <- apply(align_dat[,c("align_PA", "align_SA", "align_other")], 1, sumNA, na.rm=T)
 
 align_dat %>%
-  count(align_total) %>%
-  knitr::kable()
+  count(align_total)
+
 
 # Count NAs for each participant
 align_dat <- align_dat %>%
   rowwise() %>%
-  mutate(ipv_NA = sum(is.na(c(sumscore_PA, sumscore_SA, sumscore_other))))
+  mutate(ipv_NA = sum(is.na(c(PAscore, SAscore, USEscore))))
 
 align_dat %>%
-  count(ipv_NA) %>%
-  knitr::kable()
+  count(ipv_NA)
 
 # Remove participants that are incongruent for all questions answered and then 
 # anyone whose `sumscore_total` equals zero and have any missingness.
 ipv_final <- align_dat %>%
   rowwise() %>%
-  mutate(sumscore_PA = if_else(sumscore_PA != y1f_str_1b_never, sumscore_PA, NA_real_),
-         sumscore_SA = if_else(sumscore_SA != y1f_str_1c_never, sumscore_SA, NA_real_),
-         sumscore_other = if_else(sumscore_other != y1f_str_1d_never, sumscore_other, NA_real_),
-         ever_ipv = if_else(sumscore_total > 0, 1, 0)) %>%
+  mutate(PAscore = if_else(PAscore == 1 & y1f_str_1b_never == 1, NA_real_, PAscore),
+         SAscore = if_else(SAscore == 1 & y1f_str_1c_never == 1, NA_real_, SAscore),
+         USEscore = if_else(USEscore == 1 & y1f_str_1d_never == 1, NA_real_, USEscore)) %>%
+  mutate(ipv_NA = sum(is.na(c(PAscore, SAscore, USEscore)))) %>%
+  mutate(IPVscore = sumNA(c(PAscore, SAscore, USEscore), na.rm = T)) %>%
+  mutate(ever_ipv = if_else(IPVscore > 0, 1, 0)) %>%
   mutate(ipv_include = if_else(ipv_NA == 3, 0, 1)) %>%
-  mutate(ipv_include = if_else(sumscore_total == 0 & ipv_NA != 0, 0, ipv_include)) %>%
+  mutate(ipv_include = if_else(ever_ipv == 0 & ipv_NA != 0, 0, ipv_include)) %>%
   filter(ipv_include == 1)
-# N = 7561
+# N = 7502
 
 ipv_final %>%
-  group_by(biosex) %>%
-  count()
-# Males: N = 2689
-# Females: N = 4872
+  count(biosex)
+# Males: N = 2673
+# Females: N = 4829
+
+ipv_final %>%
+  count(biosex, ever_ipv)
+# Males, Yes: N = 857
+# Males, No: N = 1816
+# Females, Yes: N = 2018
+# Females, No: N = 2811
 
 
 # OUTPUT #######################################################################
