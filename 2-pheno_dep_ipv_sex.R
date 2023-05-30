@@ -26,12 +26,16 @@ female_dep <- s4s %>%
   filter(biosex == 2) %>%
   select(depScore) %>%
   as.vector()
+
+mean(female_dep$depScore)
 # mean = 9.50
 
 male_dep <- s4s %>%
   filter(biosex == 1) %>%
   select(depScore) %>%
   as.vector()
+
+mean(male_dep$depScore)
 # mean = 8.21
 
 dep_ttest <- t.test(x = female_dep$depScore,
@@ -64,11 +68,11 @@ glance(dep_ttest)
 ##### ipv ----
 s4s_table <- s4s %>%
   mutate(ever_ipv = as.factor(ever_ipv),
-         SAscore = as.factor(if_else(SAscore > 0 | USEscore > 0, 1, 0)),
-         PAscore = as.factor(PAscore)) %>%
+         sex_ipv = as.factor(sex_ipv),
+         phys_ipv = as.factor(phys_ipv)) %>%
   mutate(ever_ipv = fct_recode(ever_ipv, Yes = "1", No = "0"),
-         SAscore = fct_recode(SAscore, Yes = "1", No = "0"),
-         PAscore = fct_recode(PAscore, Yes = "1", No = "0"),
+         sex_ipv = fct_recode(sex_ipv, Yes = "1", No = "0"),
+         phys_ipv = fct_recode(phys_ipv, Yes = "1", No = "0"),
          biosex = as.factor(biosex)) %>%
   mutate(biosex = fct_recode(biosex, Male = "1", Female = "2"))
 
@@ -100,7 +104,11 @@ male_ipv <- s4s_table %>%
 
 s4s_table %>%
   count(ever_ipv)
-# N = 2875
+# A tibble: 2 × 2
+# ever_ipv     n
+# <fct>    <int>
+# 1 No        4627
+# 2 Yes       2875
 
 
 # Two proportion z-test
@@ -118,13 +126,13 @@ glance(ipv_proptest)
 
 # Size of those reporting IPV by sex
 female_pa <- s4s_table %>%
-  filter(biosex == "Female" & PAscore == "Yes") %>%
+  filter(biosex == "Female" & phys_ipv == "Yes") %>%
   nrow() %>%
   as.numeric()
 # n = 1039
 
 male_pa <- s4s_table %>%
-  filter(biosex == "Male" & PAscore == "Yes") %>%
+  filter(biosex == "Male" & phys_ipv == "Yes") %>%
   nrow() %>%
   as.numeric()
 # n = 726
@@ -145,13 +153,13 @@ glance(pa_proptest)
 
 # Size of those reporting IPV by sex
 female_sa <- s4s_table %>%
-  filter(biosex == "Female" & SAscore == "Yes") %>%
+  filter(biosex == "Female" & sex_ipv == "Yes") %>%
   nrow() %>%
   as.numeric()
 # n = 1564
 
 male_sa <- s4s_table %>%
-  filter(biosex == "Male" & SAscore == "Yes") %>%
+  filter(biosex == "Male" & sex_ipv == "Yes") %>%
   nrow() %>%
   as.numeric()
 # n = 291
@@ -183,7 +191,7 @@ ggplot(s4s_table, aes(x = depScore, y = ever_ipv, fill = biosex)) +
   scale_fill_manual(values = c("#40B0A6", "#E1BE6A"))
 # Color-blind friendly colors
 
-ggplot(s4s_table, aes(x = depScore, y = PAscore, fill = biosex)) +
+ggplot(s4s_table, aes(x = depScore, y = phys_ipv, fill = biosex)) +
   geom_boxplot(alpha = 0.7) +
   coord_flip() +
   theme_minimal() +
@@ -195,7 +203,7 @@ ggplot(s4s_table, aes(x = depScore, y = PAscore, fill = biosex)) +
                             size = 16)) +
   scale_fill_manual(values = c("#40B0A6", "#E1BE6A"))
 
-ggplot(s4s_table, aes(x = depScore, y = SAscore, fill = biosex)) +
+ggplot(s4s_table, aes(x = depScore, y = sex_ipv, fill = biosex)) +
   geom_boxplot(alpha = 0.7) +
   coord_flip() +
   theme_minimal() +
@@ -209,70 +217,41 @@ ggplot(s4s_table, aes(x = depScore, y = SAscore, fill = biosex)) +
 
 
 # LOGISTIC REGRESSION ##########################################################
-s4s_model1 <- glm(depScore ~ biosex, data = s4s_table)
-s4s_model2 <- glm(depScore ~ ever_ipv, data = s4s_table)
-s4s_model3 <- glm(depScore ~ biosex*ever_ipv, data = s4s_table)
-
-
-models <- list(
-  "Model 1"     = s4s_model1,
-  "Model 2"     = s4s_model2,
-  "Model 3"     = s4s_model3
-)
-
-modelsummary(models, 
-             "markdown", 
-             stars = TRUE,
-             title = "Model Comparison")
+s4s_model1 <- lm(depScore ~ biosex + ever_ipv + biosex*ever_ipv, data = s4s_table)
 
 summary(s4s_model1)
-summary(s4s_model2)
-summary(s4s_model3)
-
 
 # Run these to get info for table
 glance(s4s_model1)
-glance(s4s_model2)
-glance(s4s_model3)
-
-
 
 summary(s4s_model1)$coefficient
-summary(s4s_model2)$coefficient
-summary(s4s_model3)$coefficient
-
 
 report(s4s_model1)
-report(s4s_model2)
-report(s4s_model3)
 
 
 ### exploratory analyses ----
 # Look at the effect of sex on physical and sexual ipv exposure
-s4s_model4 <- glm(depScore ~ biosex + PAscore, data = s4s_table)
-s4s_model5 <- glm(depScore ~ biosex + SAscore, data = s4s_table)
+s4s_model2 <- glm(depScore ~ biosex + phys_ipv + biosex*phys_ipv, data = s4s_table)
+s4s_model3 <- glm(depScore ~ biosex + sex_ipv + biosex*sex_ipv, data = s4s_table)
 
-summary(s4s_model4)
-summary(s4s_model5)
+summary(s4s_model2)
+summary(s4s_model3)
 
-glance(s4s_model4)
-glance(s4s_model5)
+glance(s4s_model2)
+glance(s4s_model3)
 
-summary(s4s_model4)$coefficient
-summary(s4s_model5)$coefficient
+summary(s4s_model2)$coefficient
+summary(s4s_model3)$coefficient
 
-report(s4s_model4)
-report(s4s_model5)
+report(s4s_model2)
+report(s4s_model3)
 
 
 ### plots ----
 s4s_table %>%
-  mutate(ever_ipv = as.numeric(ever_ipv)) %>%
-  mutate(ever_ipv = if_else(ever_ipv == 1, 0, 1)) %>%
-  ggplot(aes(x=depScore, y=ever_ipv)) + 
-    geom_point(aes(color = biosex)) +
-    stat_smooth(method="glm", color="black", se=FALSE,
-                method.args = list(family=binomial)) +
+  ggplot(aes(x=biosex, y=depScore)) + 
+    geom_jitter(aes(color = biosex)) +
+    stat_smooth(method="lm", color="black", se=FALSE) +
   theme_minimal() +
   labs(title = "Sex Differences in IPV Exposure and Depression Symptoms",
        x = "Depression Symptom Score",
@@ -280,7 +259,8 @@ s4s_table %>%
        color = "Biological Sex") +
   theme(text = element_text(family = "Times",
                             size = 16)) +
-  scale_color_manual(values = c("#40B0A6", "#E1BE6A"))
+  scale_color_manual(values = c("#40B0A6", "#E1BE6A")) +
+  facet_grid(ever_ipv ~ .)
 
 
 

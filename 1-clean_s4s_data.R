@@ -82,10 +82,19 @@ all <- bind_rows(afr, amr, eas, eur, sas)
 ## join genetic data to Spit for Science data ----------------------------------
 s4s_qc <- right_join(s4s, all, by = c("unique_id" = "famid"))
 # N = 9588
+# Removed 2770
 
 # FAM #s are correct
 s4s_qc %>%
   count(fam)
+# A tibble: 5 × 2
+# fam       n
+# <chr> <int>
+# 1 AFR    2040
+# 2 AMR    1198
+# 3 EAS     929
+# 4 EUR    4594
+# 5 SAS     827
 
 
 # CLEAN DEPRESSION VARAIBLES ###################################################
@@ -98,6 +107,7 @@ dep_s4s <- s4s_qc %>%
          dep_filter = sum(c_across(dep_noAnswer:dep_skip))) %>%
   filter(dep_filter < 3)
 # N = 7732
+# Removed 1856
 
 
 ## calculate depressive symptom scores -----------------------------------------
@@ -134,128 +144,137 @@ summary(dep_s4s$depScore)
 
 ## create interpersonal violence scores ----------------------------------------
 # Replace missing values with NAs
-ipv_s4s <- dep_s4s %>%
-  mutate(y1f_str_1b_before12 = if_else(y1f_str_1b_before12 == -99, NA_real_, y1f_str_1b_before12),
-         y1f_str_1b_past12 = if_else(y1f_str_1b_past12 == -99, NA_real_, y1f_str_1b_past12),
-         Y1F_str_1b_beforeVCU = if_else(Y1F_str_1b_beforeVCU == -99, NA_real_, Y1F_str_1b_beforeVCU),
-         y1s_str_1b_sincevcu = if_else(y1s_str_1b_sincevcu == -99, NA_real_, y1s_str_1b_sincevcu),
-         y1f_str_1c_before12 = if_else(y1f_str_1c_before12 == -99, NA_real_, y1f_str_1c_before12),
-         y1f_str_1c_past12 = if_else(y1f_str_1c_past12 == -99, NA_real_, y1f_str_1c_past12),
-         Y1F_str_1c_beforeVCU = if_else(Y1F_str_1c_beforeVCU == -99, NA_real_, Y1F_str_1c_beforeVCU),
-         y1s_str_1c_sincevcu = if_else(y1s_str_1c_sincevcu == -99, NA_real_, y1s_str_1c_sincevcu),
-         y1f_str_1d_before12 = if_else(y1f_str_1d_before12 == -99, NA_real_, y1f_str_1d_before12),
-         y1f_str_1d_past12 = if_else(y1f_str_1d_past12 == -99, NA_real_, y1f_str_1d_past12),
-         Y1F_str_1d_beforeVCU = if_else(Y1F_str_1d_beforeVCU == -99, NA_real_, Y1F_str_1d_beforeVCU),
-         y1s_str_1d_sincevcu = if_else(y1s_str_1d_sincevcu == -99, NA_real_, y1s_str_1d_sincevcu),
-         y1f_str_1b_never = if_else(y1f_str_1b_never == -99, NA_real_, y1f_str_1b_never),
-         Y1S_str_1b_never = if_else(Y1S_str_1b_never == -99, NA_real_, Y1S_str_1b_never),
-         y1f_str_1c_never = if_else(y1f_str_1c_never == -99, NA_real_, y1f_str_1c_never),
-         Y1S_str_1c_never = if_else(Y1S_str_1c_never == -99, NA_real_, Y1S_str_1c_never),
-         y1f_str_1d_never = if_else(y1f_str_1d_never == -99, NA_real_, y1f_str_1d_never),
-         Y1S_str_1d_never = if_else(Y1S_str_1d_never == -99, NA_real_, Y1S_str_1d_never))
+dat <- dep_s4s %>%
+  mutate_at(names(dep_s4s[,grep("_str_1[b-d]", names(dep_s4s), ignore.case = T)]),
+            funs(na_if(., -99)))
 
+# Do rowwise summation of questions for each category (physical assault, sexual 
+# assault, & other uncomfortable sexual events), ignoring missing data.
+# 0 = No, 1 = Yes, NA = Missing data 
+ipv_dat <- dat %>%
+  mutate(phys_ipv = pmax(y1f_str_1b_before12, y1f_str_1b_past12, Y1F_str_1b_beforeVCU, na.rm= T),
+         sex_ipv = pmax(y1f_str_1c_before12, y1f_str_1c_past12, Y1F_str_1c_beforeVCU, na.rm= T),
+         other_ipv = pmax(y1f_str_1d_before12, y1f_str_1d_past12, Y1F_str_1d_beforeVCU, na.rm= T))
 
-# Sum each category (physical assault, sexual assault, & other uncomfortable sexual events), ignoring missing data.
-ipv_calc_s4s <- ipv_s4s %>%
-  rowwise() %>%
-  mutate(PAscore = sum(y1f_str_1b_before12, y1f_str_1b_past12),
-         SAscore = sum(y1f_str_1c_before12, y1f_str_1c_past12),
-         USEscore = sum(y1f_str_1d_before12, y1f_str_1d_past12)) %>%
-  mutate(PAscore = if_else(is.na(PAscore), Y1F_str_1b_beforeVCU, PAscore),
-         SAscore = if_else(is.na(SAscore), Y1F_str_1c_beforeVCU, SAscore),
-         USEscore = if_else(is.na(USEscore), Y1F_str_1d_beforeVCU, USEscore))
+# Do a rowwise summation of all sumscores to get the total score of at least one occurrence of assault in any category.
+ipv_dat$ever_ipv <- apply(ipv_dat[,c("phys_ipv", "sex_ipv", "other_ipv")], 1, sumNA, na.rm=T)
 
-# Looking at any occurrence of assault, replace any score above one with one
-# 0 = No  
-# 1 = Yes  
-# NA = Missing data  
-ipv_calc <- ipv_calc_s4s %>%
-  mutate(PAscore = if_else(PAscore > 1, 1, PAscore),
-         SAscore = if_else(SAscore > 1, 1, SAscore),
-         USEscore = if_else(USEscore > 1, 1, USEscore))
-
-# Do a rowwise summation of all sumscores to get the total score of at least one 
-# occurrence of assault in any category.
-ipv_calc$IPVscore <- apply(ipv_calc[,c("PAscore", "SAscore", "USEscore")], 1, sumNA, na.rm=T)
-
-ipv_calc %>%
-  count(IPVscore)
+ipv_dat %>%
+  count(ever_ipv)
+# A tibble: 5 × 2
+# Rowwise: 
+# ever_ipv     n
+# <dbl> <int>
+# 1        0  4749
+# 2        1  1883
+# 3        2   709
+# 4        3   342
+# 5       NA    49
 
 
 ## calculate negating scores ---------------------------------------------------
-
-never_dat <- ipv_calc %>%
+# Since the questions were "check one or more of the boxes," we need to check if 
+# any participants selected both that they did have an experience and that they 
+# never have (in the same question). Something else to consider is that the spring 
+# enrollees have a different `never` variable. Here, I collapsed them into a single 
+# variable for both fall and spring enrollees.
+# 1 = Never happened, 0 = Yes, it happened, NA = Missing data
+ipv_calc <- ipv_dat %>%
   rowwise() %>%
-  mutate(y1f_str_1b_never = if_else(is.na(y1f_str_1b_never), Y1S_str_1b_never, y1f_str_1b_never)) %>%
-  mutate(y1f_str_1c_never = if_else(is.na(y1f_str_1c_never), Y1S_str_1c_never, y1f_str_1c_never)) %>%
-  mutate(y1f_str_1d_never = if_else(is.na(y1f_str_1d_never), Y1S_str_1d_never, y1f_str_1d_never))
+  mutate(y1f_str_1b_total = if_else(is.na(y1f_str_1b_never), Y1S_str_1b_never, y1f_str_1b_never)) %>%
+  mutate(y1f_str_1c_total = if_else(is.na(y1f_str_1c_never), Y1S_str_1c_never, y1f_str_1c_never)) %>%
+  mutate(y1f_str_1d_total = if_else(is.na(y1f_str_1d_never), Y1S_str_1d_never, y1f_str_1d_never))
+
+ipv_calc %>% 
+  count(y1f_str_1b_total, y1f_str_1c_total, y1f_str_1d_total)
 
 
 ## check congruency ------------------------------------------------------------
-# Participants were able to check more than one option for the IPV exposure questions, 
-# and it was possible to check both “yes” and “never happened to me” to an IPV exposure.
-# Participants who marked both “yes” and “never happened to me” are called “incongruent” for that question. 
-# Participants will be excluded if all 3 answered IPV questions were incongruent. For IPV, 
-# participants that had only one incongruent response were not excluded, but their incongruent 
-# response was marked as missing. Participants that have congruent “never happened to me” answers and 
-# any missingness will be excluded due to the uncertainty if they would have responded “yes” to the questions skipped.
-
-# If `align` variable == 1, then `sumscore` and `never` variable do not equal (are congruent -- good!).
-# If `align` variable == 0, then `sumscore` and `never` variable are equal (are incongruent -- bad!). 
-align_dat <- never_dat %>%
+# If their answers are impossible (incongruent), mark as missing
+# Roll sexual assault and other uncomfortable experiends into one variable
+# Count how many missing variables there are
+# Make ever_ipv into a binary variable
+# Mark participants who will not be included in our final sample if they are missing all 3 ipv variables
+# and/or they report no ipv and have any missingness.
+ipv_qc <- ipv_calc %>%
   rowwise() %>%
-  mutate(align_PA = if_else(PAscore == 1 & y1f_str_1b_never == 1, 1, 0),
-         align_SA = if_else(SAscore == 1 & y1f_str_1c_never == 1, 1, 0),
-         align_other = if_else(USEscore == 1 & y1f_str_1d_never == 1, 1, 0))
-
-align_dat$align_total <- apply(align_dat[,c("align_PA", "align_SA", "align_other")], 1, sumNA, na.rm=T)
-
-align_dat %>%
-  count(align_total)
-
-
-# Count NAs for each participant
-align_dat <- align_dat %>%
-  rowwise() %>%
-  mutate(ipv_NA = sum(is.na(c(PAscore, SAscore, USEscore))))
-
-align_dat %>%
-  count(ipv_NA)
-
-# Remove participants that are incongruent for all questions answered and then 
-# anyone whose `sumscore_total` equals zero and have any missingness.
-ipv_final <- align_dat %>%
-  rowwise() %>%
-  mutate(PAscore = if_else(PAscore == 1 & y1f_str_1b_never == 1, NA_real_, PAscore),
-         SAscore = if_else(SAscore == 1 & y1f_str_1c_never == 1, NA_real_, SAscore),
-         USEscore = if_else(USEscore == 1 & y1f_str_1d_never == 1, NA_real_, USEscore)) %>%
-  mutate(ipv_NA = sum(is.na(c(PAscore, SAscore, USEscore)))) %>%
-  mutate(IPVscore = sumNA(c(PAscore, SAscore, USEscore), na.rm = T)) %>%
-  mutate(ever_ipv = if_else(IPVscore > 0, 1, 0)) %>%
+  mutate(phys_ipv = if_else(phys_ipv == 1 & y1f_str_1b_total == 1, NA_real_, phys_ipv),
+         sex_ipv = if_else(sex_ipv == 1 & y1f_str_1c_total == 1, NA_real_, sex_ipv),
+         other_ipv = if_else(other_ipv == 1 & y1f_str_1d_total == 1, NA_real_, other_ipv)) %>%
+  mutate(sex_ipv = if_else(sex_ipv == 1 | other_ipv == 1, 1, sex_ipv)) %>%
+  mutate(ipv_NA = sum(is.na(c(phys_ipv, sex_ipv, other_ipv)))) %>%
+  mutate(ipv_total = sumNA(c(phys_ipv, sex_ipv, other_ipv), na.rm = T)) %>%
+  mutate(ever_ipv = if_else(ipv_total > 0, 1, 0)) %>%
   mutate(ipv_include = if_else(ipv_NA == 3, 0, 1)) %>%
   mutate(ipv_include = if_else(ever_ipv == 0 & ipv_NA != 0, 0, ipv_include)) %>%
   filter(ipv_include == 1)
+
+ipv_qc %>%
+  count(phys_ipv, sex_ipv, other_ipv, ipv_NA, ipv_total, ever_ipv, ipv_include)
+# A tibble: 13 × 8
+# Rowwise: 
+# phys_ipv sex_ipv other_ipv ipv_NA ipv_total ever_ipv ipv_include     n
+# <dbl>   <dbl>     <dbl>  <int>     <dbl>    <dbl>       <dbl> <int>
+# 1        0       0         0      0         0        0           1  4627
+# 2        0       1         0      0         1        1           1    56
+# 3        0       1         1      0         2        1           1  1008
+# 4        0       1        NA      1         1        1           1     7
+# 5        1       0         0      0         1        1           1   957
+# 6        1       1         0      0         2        1           1    48
+# 7        1       1         1      0         3        1           1   686
+# 8        1       1        NA      1         2        1           1    11
+# 9        1      NA         0      1         1        1           1    12
+# 10       1      NA        NA      2         1        1           1    51
+# 11      NA       1         0      1         1        1           1     4
+# 12      NA       1         1      1         2        1           1    29
+# 13      NA       1        NA      2         1        1           1     6
+
+ipv_qc %>%
+  count(ipv_include, ever_ipv)
+# A tibble: 2 × 3
+# Rowwise: 
+# ipv_include ever_ipv     n
+# <dbl>    <dbl> <int>
+# 1           1        0  4627
+# 2           1        1  2875
+#
 # N = 7502
+# Removed 230
 
-ipv_final %>%
+ipv_qc %>%
   count(biosex)
-# Males: N = 2673
-# Females: N = 4829
+# A tibble: 2 × 2
+# Rowwise: 
+# biosex     n
+# <int> <int>
+# 1      1  2673
+# 2      2  4829
 
-ipv_final %>%
+ipv_qc %>%
   count(biosex, ever_ipv)
-# Males, Yes: N = 857
-# Males, No: N = 1816
-# Females, Yes: N = 2018
-# Females, No: N = 2811
+# A tibble: 4 × 3
+# Rowwise: 
+# biosex ever_ipv     n
+# <int>    <dbl> <int>
+# 1      1        0  1816
+# 2      1        1   857
+# 3      2        0  2811
+# 4      2        1  2018
+
+
+# SUBSET #######################################################################
+
+final_dat <- ipv_qc[, c("unique_id", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6",
+                          "PC7", "PC8", "PC9", "PC10", "fam", "biosex", "depScore",
+                        "ever_ipv", "phys_ipv", "sex_ipv")]
+
+final_dat <- final_dat %>%
+  rename("ancestry" = "fam")
 
 
 # OUTPUT #######################################################################
 
-write_csv(ipv_final, "../../data/thesis_s4s_clean.csv",
+write_csv(final_dat, "../../data/thesis_s4s_clean.csv",
           append = FALSE, 
           col_names = TRUE)
-
-
-
 
