@@ -426,14 +426,23 @@ df.meta <- rbind(afr, amr, eas, eur, sas)
 
 # use the metacont function for the continuous outcome for meta-analysis
 # and the forest function to create a visual table/plot
-forest(metacont(n.e = n_1,
+m.cont <- metacont(n.e = n_1,
          mean.e = m_1,
          sd.e = sd_1,
          n.c = n_0,
          mean.c = m_0,
          sd.c = sd_0,
          studlab = ancestry,
-         data = df.meta))
+         data = df.meta)
+forest(m.cont)
+summary(m.cont)
+# MD           95%-CI %W(common) %W(random)
+# AFR 1.5288 [1.1424; 1.9152]       21.1       23.8
+# AMR 2.2701 [1.7436; 2.7966]       11.4       17.0
+# EAS 2.0792 [1.4672; 2.6912]        8.4       13.9
+# EUR 1.6228 [1.3763; 1.8694]       51.9       32.9
+# SAS 1.7745 [1.1124; 2.4365]        7.2       12.5
+# 
 # Number of studies: k = 5
 # Number of observations: o = 7502
 # 
@@ -442,11 +451,16 @@ forest(metacont(n.e = n_1,
 # Random effects model 1.7926 [1.5175; 2.0678] 12.77 < 0.0001
 # 
 # Quantifying heterogeneity:
-# tau^2 = 0.0441 [0.0000; 0.7451]; tau = 0.2099 [0.0000; 0.8632]
+#   tau^2 = 0.0441 [0.0000; 0.7451]; tau = 0.2099 [0.0000; 0.8632]
 # I^2 = 43.5% [0.0%; 79.2%]; H = 1.33 [1.00; 2.19]
 # 
 # Test of heterogeneity:
 #   Q d.f. p-value
 # 7.08    4  0.1319
+# 
+# Details on meta-analytical method:
+#   - Inverse variance method
+# - Restricted maximum-likelihood estimator for tau^2
+# - Q-Profile method for confidence interval of tau^2 and tau
 
 q()
