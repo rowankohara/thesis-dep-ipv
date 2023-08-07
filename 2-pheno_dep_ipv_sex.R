@@ -12,6 +12,7 @@
 library(tidyverse)
 library(report)
 library(modelsummary)
+library(sensemakr)
 
 s4s <- read_csv("../../data/thesis_s4s_clean.csv")
 # N = 7502
@@ -58,6 +59,49 @@ sdDepM <- s4s %>%
 
 sdDepM <- as.numeric(sdDepM)
 # sd = 3.64
+
+report(dep_ttest)
+glance(dep_ttest)
+
+
+##### ipv ----
+
+no_ipv_dep <- s4s %>%
+  filter(ever_ipv == 0) %>%
+  select(depScore) %>%
+  as.vector()
+
+mean(no_ipv_dep$depScore)
+# mean = 8.38
+
+ipv_dep <- s4s %>%
+  filter(ever_ipv == 1) %>%
+  select(depScore) %>%
+  as.vector()
+
+mean(ipv_dep$depScore)
+# mean = 10.11
+
+dep_ttest <- t.test(x = ipv_dep$depScore,
+                    y = no_ipv_dep$depScore, 
+                    alternative = "greater",
+                    paired = FALSE)
+# p value = 1.15e-78
+# t = 19.035
+
+sdDepN <- s4s %>%
+  filter(ever_ipv == 0) %>%
+  summarise(depScore = sd(depScore))
+
+sdDepN <- as.numeric(sdDepN)
+# sd = 3.61
+
+sdDepIPV <- s4s %>%
+  filter(ever_ipv == 1) %>%
+  summarise(depScore = sd(depScore))
+
+sdDepIPV <- as.numeric(sdDepIPV)
+# sd = 3.95
 
 report(dep_ttest)
 glance(dep_ttest)
@@ -178,13 +222,13 @@ glance(sa_proptest)
 
 ## plots ----
 
-ggplot(s4s_table, aes(x = depScore, y = ever_ipv, fill = biosex)) +
+ggplot(s4s_table, aes(x = ever_ipv, y = depScore, fill = biosex)) +
   geom_boxplot(alpha = 0.7) +
-  coord_flip() +
+  stat_summary(fun = mean, geom = "text", col = "black", position = position_dodge(0.75), vjust = -0.1, aes(label = round(after_stat(y), digits = 2))) +
   theme_minimal() +
-  labs(title = "Sex Differences in IPV Exposure and Depression Symptoms",
-       x = "Depression Symptom Score",
-       y = "IPV Exposure",
+  labs(title = "Sex Differences in IPT Exposure and Depressive Symptoms Score",
+       x = "IPT Exposure",
+       y = "Depressive Symptoms Score",
        fill = "Biological Sex") +
   theme(text = element_text(family = "Times",
                             size = 16)) +
@@ -216,7 +260,7 @@ ggplot(s4s_table, aes(x = depScore, y = sex_ipv, fill = biosex)) +
   scale_fill_manual(values = c("#40B0A6", "#E1BE6A"))
 
 
-# LOGISTIC REGRESSION ##########################################################
+# LINEAR REGRESSION ############################################################
 s4s_model1 <- lm(depScore ~ biosex + ever_ipv + biosex*ever_ipv, data = s4s_table)
 
 summary(s4s_model1)
@@ -227,6 +271,20 @@ glance(s4s_model1)
 summary(s4s_model1)$coefficient
 
 report(s4s_model1)
+
+# Odds Ratio
+exp(coef(s4s_model1))
+# biosexFemale              2.867680
+# ever_ipvYes               4.380554
+# biosexFemale:ever_ipvYes  1.239828
+
+# for confidence intervals
+exp(confint(s4s_model1))
+
+partial_r2(s4s_model1)
+# biosexFemale              0.011773133
+# ever_ipvYes               0.012209921
+# biosexFemale:ever_ipvYes  0.000175003
 
 
 ### exploratory analyses ----
@@ -253,9 +311,9 @@ s4s_table %>%
     geom_jitter(aes(color = biosex)) +
     stat_smooth(method="lm", color="black", se=FALSE) +
   theme_minimal() +
-  labs(title = "Sex Differences in IPV Exposure and Depression Symptoms",
+  labs(title = "Sex Differences in IPT Exposure and Depression Symptoms",
        x = "Depression Symptom Score",
-       y = "IPV Exposure",
+       y = "IPT Exposure",
        color = "Biological Sex") +
   theme(text = element_text(family = "Times",
                             size = 16)) +
